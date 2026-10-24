@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     # Si se define, las rutas /summaries exigen "Authorization: Bearer <token>". Vacío = sin protección (solo local).
     api_token: str = ""
 
+    # URL de Postgres (postgresql://usuario:clave@host:5432/bd). Si está vacía se usa SQLite local en db_path.
+    db_url: str = ""
     db_path: str = "data/rezume.db"
     summary_language: str = "español"
     web_search_default: bool = False

@@ -53,6 +53,7 @@ def test_long_chunk_is_split(monkeypatch):
 
 def test_api_contract(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setenv("DB_URL", "")
     monkeypatch.setenv("API_TOKEN", "")
     from app.config import get_settings
 
@@ -110,6 +111,7 @@ def test_window_seconds():
 
 def test_token_required(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setenv("DB_URL", "")
     monkeypatch.setenv("API_TOKEN", "secreto")
     from app.config import get_settings
 
