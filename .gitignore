@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Específico de este proyecto ---
+# Base de datos local de resúmenes
+data/
+*.db
+# Nota de trabajo con capturas: nunca va al historial
+verificar.pdf
