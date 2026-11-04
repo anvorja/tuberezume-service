@@ -1,12 +1,9 @@
-import sqlite3
 import threading
-from pathlib import Path
 
 from .config import get_settings
 from .schemas import Summary
 
-# Postgres si hay DB_URL; si no, SQLite local (desarrollo y pruebas).
-# Las consultas se escriben con "?" y se adaptan al driver en _run.
+# Todo se guarda en Postgres (DB_URL). Las consultas se escriben con "?" y se adaptan en _run.
 
 _pool = None
 _pool_url = ""
@@ -27,24 +24,15 @@ def _pg_pool():
 
 def _run(sql: str, params: tuple = (), fetch: str | None = None):
     """Ejecuta `sql` y devuelve filas ("all"/"one") o el número de filas afectadas."""
-    if get_settings().db_url:
-        with _pg_pool().connection() as con:
-            cur = con.execute(sql.replace("?", "%s"), params)
-            if fetch == "all":
-                return cur.fetchall()
-            if fetch == "one":
-                return cur.fetchone()
-            return cur.rowcount
-    path = Path(get_settings().db_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(path, timeout=30)
-    try:
-        cur = con.execute(sql, params)
-        result = cur.fetchall() if fetch == "all" else cur.fetchone() if fetch == "one" else cur.rowcount
-        con.commit()
-        return result
-    finally:
-        con.close()
+    if not get_settings().db_url:
+        raise RuntimeError("Falta DB_URL en el .env: el backend guarda todo en Postgres (Neon).")
+    with _pg_pool().connection() as con:
+        cur = con.execute(sql.replace("?", "%s"), params)
+        if fetch == "all":
+            return cur.fetchall()
+        if fetch == "one":
+            return cur.fetchone()
+        return cur.rowcount
 
 
 def init_db() -> None:

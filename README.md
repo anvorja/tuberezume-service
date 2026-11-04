@@ -30,7 +30,7 @@ El estado avanza `queued → transcribing → summarizing → ready` (o `failed`
 ollama pull qwen2.5:7b
 ```
 
-- Una base de datos Postgres (`DB_URL`). Sin ella usa SQLite local, solo para desarrollo y pruebas.
+- Una base de datos Postgres (`DB_URL`), por ejemplo Neon. Es obligatoria: sin ella el backend no guarda nada.
 
 ## Arrancar
 
@@ -46,7 +46,7 @@ uv run uvicorn app.main:app --port 8000
 
 | Variable | Para qué sirve |
 | --- | --- |
-| `DB_URL` | URL de Postgres (`postgresql://usuario:clave@host:5432/bd`; añade `?sslmode=require` si el proveedor lo pide). Vacía = SQLite en `DB_PATH`. |
+| `DB_URL` | URL de Postgres (`postgresql://usuario:clave@host:5432/bd`; añade `?sslmode=require` si el proveedor lo pide). Obligatoria. |
 | `API_TOKEN` | Clave de acceso. Con ella definida, `/summaries` exige `Authorization: Bearer <clave>`. **Obligatoria si expones el backend.** Genera una con `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
 | `CORS_ORIGINS` | Orígenes del frontend permitidos, separados por coma (local y desplegado). |
 | `CORS_ORIGIN_REGEX` | Opcional, para URLs variables como las previews de Netlify. |
@@ -91,7 +91,7 @@ Los errores devuelven `{ "message": "…" }` (el frontend lo muestra tal cual); 
 uv run pytest
 ```
 
-Las pruebas fuerzan SQLite aislado, así que nunca tocan tu base de datos real.
+Las pruebas usan un almacén en memoria, así que nunca tocan tu base de datos real.
 
 ## Estructura
 
@@ -99,7 +99,7 @@ Las pruebas fuerzan SQLite aislado, así que nunca tocan tu base de datos real.
 app/
   main.py         rutas, CORS y clave de acceso
   pipeline.py     orquestación de cada trabajo y progreso
-  db.py           Postgres (pool) o SQLite
+  db.py           Postgres (pool de conexiones)
   schemas.py      contrato JSON (camelCase) que consume el frontend
   services/       youtube, llm (Ollama), summarize, websearch
 tests/

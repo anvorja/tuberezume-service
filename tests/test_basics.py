@@ -51,9 +51,22 @@ def test_long_chunk_is_split(monkeypatch):
     assert len({c.start for c in chunks}) == len(chunks)
 
 
-def test_api_contract(tmp_path, monkeypatch):
-    monkeypatch.setenv("DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setenv("DB_URL", "")
+def fake_db(monkeypatch):
+    """Sustituye Postgres por un diccionario en memoria."""
+    store: dict = {}
+    from app import db
+
+    monkeypatch.setattr(db, "init_db", lambda: None)
+    monkeypatch.setattr(db, "save", lambda s: store.__setitem__(s.id, s))
+    monkeypatch.setattr(db, "get", lambda i: store.get(i))
+    monkeypatch.setattr(db, "list_all", lambda: sorted(store.values(), key=lambda s: s.created_at, reverse=True))
+    monkeypatch.setattr(db, "delete", lambda i: store.pop(i, None) is not None)
+    monkeypatch.setattr(db, "fail_interrupted", lambda: None)
+    return store
+
+
+def test_api_contract(monkeypatch):
+    fake_db(monkeypatch)
     monkeypatch.setenv("API_TOKEN", "")
     from app.config import get_settings
 
@@ -109,9 +122,8 @@ def test_window_seconds():
     assert window_seconds(lines(100, step=10)) == 123        # intermedio: ~8 secciones
 
 
-def test_token_required(tmp_path, monkeypatch):
-    monkeypatch.setenv("DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setenv("DB_URL", "")
+def test_token_required(monkeypatch):
+    fake_db(monkeypatch)
     monkeypatch.setenv("API_TOKEN", "secreto")
     from app.config import get_settings
 
