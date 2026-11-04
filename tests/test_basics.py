@@ -289,3 +289,16 @@ def test_passwords_and_tokens(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "z" * 40)
     get_settings.cache_clear()
     assert security.read_token(t) is None  # firmado con otra clave
+
+
+def test_query_server_does_not_fail_running_jobs(monkeypatch):
+    calls = []
+    for flag, expected in ((False, 0), (True, 1)):
+        calls.clear()
+        c = make_client(monkeypatch, can_process=flag)
+        from app import db
+
+        monkeypatch.setattr(db, "fail_interrupted", lambda: calls.append(1))
+        with c:
+            pass
+        assert len(calls) == expected

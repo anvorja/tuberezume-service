@@ -23,7 +23,9 @@ async def lifespan(_: FastAPI):
     if len(get_settings().jwt_secret) < 32:
         raise RuntimeError("Falta JWT_SECRET (mínimo 32 caracteres) en el .env.")
     db.init_db()
-    db.fail_interrupted()
+    # Solo quien procesa puede saber que un trabajo quedó a medias; el servidor de consulta no debe tocarlos.
+    if get_settings().can_process:
+        db.fail_interrupted()
     yield
 
 
