@@ -35,8 +35,10 @@ ollama pull qwen2.5:7b
 ## Arrancar
 
 ```bash
-cp .env.example .env     # y rellena DB_URL y API_TOKEN
+cp .env.example .env     # y rellena DB_URL y JWT_SECRET
 uv sync
+uv run python -m app.cli crear-usuario admin --rol admin     # pide la contraseña por teclado
+uv run python -m app.cli crear-usuario tunombre --rol user
 uv run uvicorn app.main:app --port 8000
 ```
 
@@ -47,7 +49,9 @@ uv run uvicorn app.main:app --port 8000
 | Variable | Para qué sirve |
 | --- | --- |
 | `DB_URL` | URL de Postgres (`postgresql://usuario:clave@host:5432/bd`; añade `?sslmode=require` si el proveedor lo pide). Obligatoria. |
-| `API_TOKEN` | Clave de acceso. Con ella definida, `/summaries` exige `Authorization: Bearer <clave>`. **Obligatoria si expones el backend.** Genera una con `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
+| `JWT_SECRET` | Clave (≥ 32 caracteres) con la que se firman las sesiones. **Obligatoria**, y la misma en todos los servidores que compartan base de datos. Genera una con `python -c "import secrets; print(secrets.token_urlsafe(48))"`. |
+| `TOKEN_DAYS` | Días de validez de cada inicio de sesión (30 por defecto). |
+| `CAN_PROCESS` | `true` (por defecto) en tu equipo con ngrok: procesa videos. `false` en el servidor de nube: solo consulta, notas y borrado. |
 | `CORS_ORIGINS` | Orígenes del frontend permitidos, separados por coma (local y desplegado). |
 | `CORS_ORIGIN_REGEX` | Opcional, para URLs variables como las previews de Netlify. |
 | `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_NUM_CTX`, `OLLAMA_TIMEOUT` | Conexión y modelo de Ollama. |
@@ -55,28 +59,56 @@ uv run uvicorn app.main:app --port 8000
 | `WEB_SEARCH_DEFAULT` | Si la búsqueda web va activada cuando la petición no lo indica. |
 | `CHUNK_SECONDS` | Tope de la ventana para videos sin capítulos. |
 
+## Usuarios y sesión
+
+Hay dos roles. Las contraseñas se guardan con hash (scrypt) y nunca en el código ni en el repositorio.
+
+- **`user`**: dueño de sus resúmenes. Cada uno ve solo los suyos. Puede leerlos, escribir **notas** por video, borrarlos y, en el servidor con `CAN_PROCESS=true`, procesar videos.
+- **`admin`**: solo gestiona usuarios (crear, cambiar clave, desactivar, eliminar). No tiene resúmenes ni puede procesar.
+
+La cuenta de usuario se crea con la CLI (`app.cli`, ver «Arrancar») o, si ya hay un admin, desde la pantalla **Usuarios** de la web. Tras 5 contraseñas erróneas seguidas se bloquea ese usuario+IP durante 1 minuto. Cambiar la contraseña de alguien: `uv run python -m app.cli cambiar-clave NOMBRE`.
+
+## Dos servidores, una base de datos
+
+La idea es procesar en tu PC (más potente, gratis) y poder **consultar el historial desde cualquier equipo** sin que el PC esté encendido:
+
+| | Servidor local (ngrok) | Servidor de nube (solo lectura) |
+| --- | --- | --- |
+| `CAN_PROCESS` | `true` | `false` |
+| `DB_URL` y `JWT_SECRET` | los mismos | los mismos |
+| Procesar videos | sí | no (`403` con un mensaje claro) |
+| Leer, notas y borrar | sí | sí |
+
+Como comparten `JWT_SECRET`, el mismo inicio de sesión vale en ambos. En la nube basta cualquier servicio que ejecute `uvicorn app.main:app` con las variables de entorno definidas en su panel (nunca en el repositorio); no necesita Ollama.
+
 ## Usarlo con el frontend desplegado (Netlify + ngrok)
 
 El backend sigue en tu máquina y un túnel lo hace accesible desde internet. YouTube bloquea las transcripciones desde IPs de servidores en la nube, pero desde una IP residencial como la tuya suele funcionar.
 
 1. Terminal 1: `uv run uvicorn app.main:app --port 8000`
 2. Terminal 2: `ngrok http 8000` y copia la URL `https://….ngrok-free.app`.
-3. En la web, **Ajustes → Conexión con el backend**: pega esa URL y el valor de `API_TOKEN`.
-4. Comprueba el túnel abriendo `https://TU-URL.ngrok-free.app/health`: debe responder `{"ok":true,"auth":true}`.
+3. En la web, **Entrar**: pega esa URL, tu usuario y tu contraseña. (Después se cambia de servidor en **Ajustes**.)
+4. Comprueba el túnel abriendo `https://TU-URL.ngrok-free.app/health`: debe responder `{"ok":true,"auth":true,"canProcess":true}`.
 
-La URL gratuita de ngrok **cambia en cada arranque**; la clave no. El origen del frontend debe estar en `CORS_ORIGINS`. Para desarrollo local, en `content-youtube-easy/.env.local` basta `VITE_API_URL=http://localhost:8000`.
+La URL gratuita de ngrok **cambia en cada arranque**; los resúmenes y las cuentas no, porque están en Postgres. El origen del frontend debe estar en `CORS_ORIGINS`. Para desarrollo local, en `content-youtube-easy/.env.local` basta `VITE_API_URL=http://localhost:8000`.
 
 ## Endpoints
 
+Todas las rutas salvo `/health` y `/auth/login` exigen `Authorization: Bearer <sesión>`.
+
 | Método y ruta | Cuerpo | Respuesta |
 | --- | --- | --- |
-| `POST /summaries` | `{ "url": "…", "webSearch": true? }` | `201` con el `Summary` en cola |
-| `GET /summaries` | | `Summary[]`, del más reciente al más antiguo |
+| `POST /auth/login` | `{ "username", "password" }` | `{ token, user, canProcess }` |
+| `GET /auth/me` | | lo mismo, validando la sesión |
+| `POST /summaries` | `{ "url": "…", "webSearch": true? }` | `201` con el `Summary` en cola (`403` si `CAN_PROCESS=false`) |
+| `GET /summaries` | | `Summary[]` del usuario, del más reciente al más antiguo |
 | `GET /summaries/{id}` | | `Summary` |
+| `PATCH /summaries/{id}/notes` | `{ "notes": "…" }` (≤ 20 000 caracteres) | `Summary` actualizado |
 | `DELETE /summaries/{id}` | | `204` |
-| `GET /health` | | `{ "ok": true, "auth": <hay clave definida> }` (público) |
+| `GET/POST /admin/users`, `PATCH/DELETE /admin/users/{id}` | solo `admin` | gestión de usuarios |
+| `GET /health` | | `{ "ok": true, "auth": true, "canProcess": <bool> }` (público) |
 
-Los errores devuelven `{ "message": "…" }` (el frontend lo muestra tal cual); sin clave o con una incorrecta, `401`.
+Los errores devuelven `{ "message": "…" }` (el frontend lo muestra tal cual); sin sesión válida, `401`; con el rol equivocado, `403`.
 
 ## Límites conocidos
 
@@ -97,7 +129,9 @@ Las pruebas usan un almacén en memoria, así que nunca tocan tu base de datos r
 
 ```
 app/
-  main.py         rutas, CORS y clave de acceso
+  main.py         rutas, CORS, sesión y roles
+  security.py     hash de contraseñas, tokens y freno de intentos
+  cli.py          crear usuarios y cambiar contraseñas
   pipeline.py     orquestación de cada trabajo y progreso
   db.py           Postgres (pool de conexiones)
   schemas.py      contrato JSON (camelCase) que consume el frontend

@@ -45,8 +45,43 @@ class Summary(CamelModel):
     transcript: list[TranscriptLine] = Field(default_factory=list)
     web_search: bool = False
     sources: list[Source] = Field(default_factory=list)
+    notes: str = ""
 
 
 class CreateSummary(CamelModel):
     url: str
     web_search: bool | None = None
+
+
+class NotesIn(CamelModel):
+    notes: str = Field(max_length=20000)
+
+
+class LoginIn(CamelModel):
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=200)
+
+
+class UserOut(CamelModel):
+    id: str
+    username: str
+    role: Literal["admin", "user"]
+    active: bool
+    created_at: str
+
+
+class Session(CamelModel):
+    token: str
+    user: UserOut
+    can_process: bool
+
+
+class UserCreate(CamelModel):
+    username: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_.-]+$")
+    password: str = Field(min_length=8, max_length=200)
+    role: Literal["admin", "user"] = "user"
+
+
+class UserPatch(CamelModel):
+    password: str | None = Field(default=None, min_length=8, max_length=200)
+    active: bool | None = None

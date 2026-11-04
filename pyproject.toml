@@ -10,6 +10,7 @@ dependencies = [
     "httpx>=0.28.1",
     "psycopg[binary,pool]>=3.3.6",
     "pydantic-settings>=2.16.1",
+    "pyjwt>=2.10",
     "uvicorn[standard]>=0.54.0",
     "youtube-transcript-api>=1.2.4",
     "yt-dlp>=2026.10.21",

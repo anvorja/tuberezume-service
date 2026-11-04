@@ -14,7 +14,7 @@ log = logging.getLogger("rezume")
 _executor = ThreadPoolExecutor(max_workers=1)
 
 
-def create(url: str, web_search: bool | None) -> Summary:
+def create(url: str, web_search: bool | None, user_id: str) -> Summary:
     video_id = youtube.parse_video_id(url)
     if not video_id:
         raise ValueError("El enlace no parece ser de un video de YouTube.")
@@ -25,7 +25,7 @@ def create(url: str, web_search: bool | None) -> Summary:
         created_at=datetime.now(timezone.utc).isoformat(),
         web_search=get_settings().web_search_default if web_search is None else web_search,
     )
-    db.save(s)
+    db.save(s, user_id)
     _executor.submit(_run, s.id)
     return s
 

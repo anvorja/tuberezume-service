@@ -14,8 +14,12 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     cors_origin_regex: str = ""
 
-    # Si se define, las rutas /summaries exigen "Authorization: Bearer <token>". Vacío = sin protección (solo local).
-    api_token: str = ""
+    # Clave con la que se firman las sesiones (obligatoria). Debe ser la misma en todos los servidores
+    # que compartan base de datos (ngrok y nube), para que un mismo login valga en ambos.
+    jwt_secret: str = ""
+    token_days: int = 30
+    # False en el servidor de nube: solo consulta, borrado y notas; no procesa videos.
+    can_process: bool = True
 
     # URL de Postgres (postgresql://usuario:clave@host:5432/bd). Obligatoria.
     db_url: str = ""
