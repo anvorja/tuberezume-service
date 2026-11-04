@@ -81,6 +81,36 @@ La idea es procesar en tu PC (más potente, gratis) y poder **consultar el histo
 
 Como comparten `JWT_SECRET`, el mismo inicio de sesión vale en ambos. En la nube basta cualquier servicio que ejecute `uvicorn app.main:app` con las variables de entorno definidas en su panel (nunca en el repositorio); no necesita Ollama.
 
+### Desplegar el servidor de consulta en Render
+
+Es un *Web Service* conectado a este repositorio (rama `main`). La versión de Python sale de `.python-version` (3.12).
+
+| Campo | Valor |
+| --- | --- |
+| Root Directory | vacío |
+| Build Command | `uv sync --frozen && uv cache prune --ci` |
+| Start Command | `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Health Check Path | `/health` |
+| Auto-Deploy | `On Commit` (cada `git push` redespliega) |
+| Plan | el gratuito basta: este servidor no ejecuta Ollama |
+
+Variables de entorno (se definen en el panel de Render, **nunca** en el repositorio):
+
+| Variable | Valor |
+| --- | --- |
+| `DB_URL` | la misma que en tu equipo |
+| `JWT_SECRET` | **idéntico** al de tu equipo; si difiere, la sesión de un servidor no vale en el otro |
+| `CAN_PROCESS` | `false` |
+| `CORS_ORIGINS` | incluye el origen del frontend, p. ej. `https://tuberezume.netlify.app` |
+| `TOKEN_DAYS`, `SUMMARY_LANGUAGE`, `WEB_SEARCH_DEFAULT`, `CHUNK_SECONDS` | opcionales (valores por defecto en `.env.example`) |
+
+Comprueba el despliegue en `https://TU-SERVICIO.onrender.com/health`: debe responder `{"ok":true,"auth":true,"canProcess":false}`. Después, en la web, **Ajustes → Conexión**, pega esa URL.
+
+Notas de funcionamiento:
+
+- En el plan gratuito Render apaga el servicio tras un rato sin uso. La primera petición después tarda 30–60 s; luego va normal.
+- Al arrancar, solo el servidor con `CAN_PROCESS=true` marca como fallidos los trabajos que quedaron a medias. El de consulta no los toca, para no estropear un video que tu equipo esté procesando mientras Render se reinicia.
+
 ## Usarlo con el frontend desplegado (Netlify + ngrok)
 
 El backend sigue en tu máquina y un túnel lo hace accesible desde internet. YouTube bloquea las transcripciones desde IPs de servidores en la nube, pero desde una IP residencial como la tuya suele funcionar.
