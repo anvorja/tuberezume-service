@@ -12,6 +12,7 @@ from .schemas import (
     NotesIn,
     Session,
     Summary,
+    TagsIn,
     UserCreate,
     UserOut,
     UserPatch,
@@ -136,6 +137,18 @@ def save_notes(summary_id: str, body: NotesIn, user: db.User = Depends(member)):
     if s.status not in ("ready", "failed"):
         raise HTTPException(409, "Espera a que termine el resumen para editar las notas.")
     s.notes = body.notes
+    db.save(s)
+    return s
+
+
+@app.patch("/summaries/{summary_id}/tags", response_model=Summary, response_model_by_alias=True)
+def save_tags(summary_id: str, body: TagsIn, user: db.User = Depends(member)):
+    s = db.get_for_user(summary_id, user.id)
+    if s is None:
+        raise HTTPException(404, "Resumen no encontrado.")
+    if s.status not in ("ready", "failed"):
+        raise HTTPException(409, "Espera a que termine el resumen para etiquetarlo.")
+    s.tags = body.tags
     db.save(s)
     return s
 

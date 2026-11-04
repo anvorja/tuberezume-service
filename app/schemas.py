@@ -1,6 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+import re
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 SummaryStatus = Literal["queued", "transcribing", "summarizing", "ready", "failed"]
@@ -46,6 +48,7 @@ class Summary(CamelModel):
     web_search: bool = False
     sources: list[Source] = Field(default_factory=list)
     notes: str = ""
+    tags: list[str] = Field(default_factory=list)
 
 
 class CreateSummary(CamelModel):
@@ -55,6 +58,31 @@ class CreateSummary(CamelModel):
 
 class NotesIn(CamelModel):
     notes: str = Field(max_length=20000)
+
+
+MAX_TAGS = 10
+_TAG_OK = re.compile(r"^[\w .+#&-]{1,24}$", re.UNICODE)
+
+
+class TagsIn(CamelModel):
+    tags: list[str] = Field(max_length=MAX_TAGS)
+
+    @field_validator("tags")
+    @classmethod
+    def clean(cls, tags: list[str]) -> list[str]:
+        """Espacios normalizados, sin repetidos (sin distinguir mayúsculas) y con caracteres seguros."""
+        out: list[str] = []
+        seen: set[str] = set()
+        for raw in tags:
+            tag = " ".join(raw.split())
+            if not _TAG_OK.match(tag):
+                raise ValueError(
+                    "Cada etiqueta debe tener entre 1 y 24 caracteres (letras, números, espacios y . + # & -)."
+                )
+            if tag.casefold() not in seen:
+                seen.add(tag.casefold())
+                out.append(tag)
+        return out
 
 
 class LoginIn(CamelModel):

@@ -302,3 +302,24 @@ def test_query_server_does_not_fail_running_jobs(monkeypatch):
         with c:
             pass
         assert len(calls) == expected
+
+
+def test_tags_are_cleaned_saved_and_private(monkeypatch):
+    from app import db, security
+    from app.schemas import Summary
+
+    with make_client(monkeypatch) as c:
+        _, ana = seed(monkeypatch)
+        db.create_user("beto", security.hash_password("clave-beto-12"), "user")
+        db.save(Summary(id="t1", url="u", video_id="v", created_at="2026-01-01", status="ready"), ana.id)
+        db.save(Summary(id="t2", url="u", video_id="v", created_at="2026-01-02", status="summarizing"), ana.id)
+        _, h = login(c, "ana", "clave-ana-123")
+        _, hb = login(c, "beto", "clave-beto-12")
+        r = c.patch("/summaries/t1/tags", json={"tags": ["  Java ", "java", "Spring  Boot", "C#"]}, headers=h)
+        assert r.status_code == 200 and r.json()["tags"] == ["Java", "Spring Boot", "C#"]
+        assert c.get("/summaries", headers=h).json()[0]["tags"] == ["Java", "Spring Boot", "C#"]
+        assert c.patch("/summaries/t1/tags", json={"tags": []}, headers=h).json()["tags"] == []
+        for bad in (["<script>"], [""], ["x" * 25], [str(i) for i in range(11)]):
+            assert c.patch("/summaries/t1/tags", json={"tags": bad}, headers=h).status_code == 422
+        assert c.patch("/summaries/t1/tags", json={"tags": ["x"]}, headers=hb).status_code == 404
+        assert c.patch("/summaries/t2/tags", json={"tags": ["x"]}, headers=h).status_code == 409

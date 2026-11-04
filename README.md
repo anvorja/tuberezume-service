@@ -63,7 +63,7 @@ uv run uvicorn app.main:app --port 8000
 
 Hay dos roles. Las contraseñas se guardan con hash (scrypt) y nunca en el código ni en el repositorio.
 
-- **`user`**: dueño de sus resúmenes. Cada uno ve solo los suyos. Puede leerlos, escribir **notas** por video, borrarlos y, en el servidor con `CAN_PROCESS=true`, procesar videos.
+- **`user`**: dueño de sus resúmenes. Cada uno ve solo los suyos. Puede leerlos, escribir **notas** y poner **etiquetas** (carpetas) por video, borrarlos y, en el servidor con `CAN_PROCESS=true`, procesar videos.
 - **`admin`**: solo gestiona usuarios (crear, cambiar clave, desactivar, eliminar). No tiene resúmenes ni puede procesar.
 
 La cuenta de usuario se crea con la CLI (`app.cli`, ver «Arrancar») o, si ya hay un admin, desde la pantalla **Usuarios** de la web. Tras 5 contraseñas erróneas seguidas se bloquea ese usuario+IP durante 1 minuto. Cambiar la contraseña de alguien: `uv run python -m app.cli cambiar-clave NOMBRE`.
@@ -134,6 +134,7 @@ Todas las rutas salvo `/health` y `/auth/login` exigen `Authorization: Bearer <s
 | `GET /summaries` | | `Summary[]` del usuario, del más reciente al más antiguo |
 | `GET /summaries/{id}` | | `Summary` |
 | `PATCH /summaries/{id}/notes` | `{ "notes": "…" }` (≤ 20 000 caracteres) | `Summary` actualizado |
+| `PATCH /summaries/{id}/tags` | `{ "tags": ["Java", …] }` (máx. 10; 1–24 caracteres: letras, números, espacios y `. + # & -`) | `Summary` con las etiquetas ya limpias (sin repetidas, sin distinguir mayúsculas) |
 | `DELETE /summaries/{id}` | | `204` |
 | `GET/POST /admin/users`, `PATCH/DELETE /admin/users/{id}` | solo `admin` | gestión de usuarios |
 | `GET /health` | | `{ "ok": true, "auth": true, "canProcess": <bool> }` (público) |
