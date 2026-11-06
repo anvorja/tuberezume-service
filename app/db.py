@@ -108,13 +108,16 @@ def delete_for_user(summary_id: str, user_id: str) -> bool:
     return _run("DELETE FROM summaries WHERE id = ? AND user_id = ?", (summary_id, user_id)) > 0
 
 
-def fail_interrupted() -> None:
-    """Marca como fallidos los trabajos que quedaron a medias al reiniciar."""
+def mark_interrupted() -> int:
+    """Al arrancar, marca como interrumpidos los trabajos que quedaron a medias (la cola vive en memoria)."""
+    n = 0
     for s in all_summaries():
-        if s.status not in ("ready", "failed"):
-            s.status = "failed"
-            s.error = "El servidor se reinició durante el procesamiento."
+        if s.status in ("queued", "transcribing", "summarizing"):
+            s.status = "interrupted"
+            s.error = "El servidor se reinició antes de terminar este resumen. Puedes reanudarlo o descartarlo."
             save(s)
+            n += 1
+    return n
 
 
 def claim_orphans(user_id: str) -> int:

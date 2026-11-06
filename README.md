@@ -19,7 +19,7 @@ URL ─► metadatos (yt-dlp: título, canal, duración, capítulos)
     ─► síntesis final → tldr + keyPoints
 ```
 
-El estado avanza `queued → transcribing → summarizing → ready` (o `failed`), con `progress` de 0 a 1. Se procesa **un video a la vez**, porque el modelo local satura la GPU/CPU. Un video de 36 min con capítulos tardó unos 7 min en una GTX 1650 Ti (4 GB).
+El estado avanza `queued → transcribing → summarizing → ready` (o `failed`), con `progress` de 0 a 1. Si el servidor se reinicia con trabajos pendientes, al arrancar quedan en `interrupted`: el usuario decide si los reanuda (`POST /summaries/{id}/resume`, empieza de cero y conserva notas y etiquetas) o los descarta (`DELETE`). Se procesa **un video a la vez**, porque el modelo local satura la GPU/CPU. Un video de 36 min con capítulos tardó unos 7 min en una GTX 1650 Ti (4 GB).
 
 ## Requisitos
 
@@ -135,6 +135,7 @@ Todas las rutas salvo `/health` y `/auth/login` exigen `Authorization: Bearer <s
 | `GET /summaries/{id}` | | `Summary` |
 | `PATCH /summaries/{id}/notes` | `{ "notes": "…" }` (≤ 20 000 caracteres) | `Summary` actualizado |
 | `PATCH /summaries/{id}/tags` | `{ "tags": ["Java", …] }` (máx. 10; 1–24 caracteres: letras, números, espacios y `. + # & -`) | `Summary` con las etiquetas ya limpias (sin repetidas, sin distinguir mayúsculas) |
+| `POST /summaries/{id}/resume` | | `Summary` de nuevo en cola (`409` si no está `interrupted`, `403` si `CAN_PROCESS=false`) |
 | `DELETE /summaries/{id}` | | `204` |
 | `GET/POST /admin/users`, `PATCH/DELETE /admin/users/{id}` | solo `admin` | gestión de usuarios |
 | `GET /health` | | `{ "ok": true, "auth": true, "canProcess": <bool> }` (público) |

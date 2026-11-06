@@ -26,7 +26,7 @@ async def lifespan(_: FastAPI):
     db.init_db()
     # Solo quien procesa puede saber que un trabajo quedó a medias; el servidor de consulta no debe tocarlos.
     if get_settings().can_process:
-        db.fail_interrupted()
+        db.mark_interrupted()
     yield
 
 
@@ -114,6 +114,20 @@ def create_summary(body: CreateSummary, user: db.User = Depends(member)):
         return pipeline.create(body.url, body.web_search, user.id)
     except ValueError as e:
         raise HTTPException(422, str(e))
+
+
+@app.post("/summaries/{summary_id}/resume", response_model=Summary, response_model_by_alias=True)
+def resume_summary(summary_id: str, user: db.User = Depends(member)):
+    if not get_settings().can_process:
+        raise HTTPException(
+            403, "Este servidor es solo de consulta. Reanuda el resumen desde el equipo con ngrok."
+        )
+    s = db.get_for_user(summary_id, user.id)
+    if s is None:
+        raise HTTPException(404, "No encontramos este resumen.")
+    if s.status != "interrupted":
+        raise HTTPException(409, "Solo se pueden reanudar los resúmenes interrumpidos.")
+    return pipeline.resume(s)
 
 
 @app.get("/summaries", response_model=list[Summary], response_model_by_alias=True)

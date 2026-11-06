@@ -30,6 +30,14 @@ def create(url: str, web_search: bool | None, user_id: str) -> Summary:
     return s
 
 
+def resume(s: Summary) -> Summary:
+    """Vuelve a poner en cola un resumen interrumpido. Empieza desde cero, conservando notas y etiquetas."""
+    s.status, s.progress, s.error = "queued", 0, None
+    db.save(s)
+    _executor.submit(_run, s.id)
+    return s
+
+
 def window_seconds(lines) -> int:
     """Ventana para videos sin capítulos: apunta a ~8 secciones, entre 90 s y `chunk_seconds`."""
     total = lines[-1].start if lines else 0

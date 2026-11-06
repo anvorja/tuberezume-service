@@ -90,7 +90,7 @@ def fake_db(monkeypatch):
         return users.pop(uid, None) is not None
 
     monkeypatch.setattr(db, "init_db", lambda: None)
-    monkeypatch.setattr(db, "fail_interrupted", lambda: None)
+    monkeypatch.setattr(db, "mark_interrupted", lambda: 0)
     monkeypatch.setattr(db, "save", save)
     monkeypatch.setattr(db, "get", lambda i: sums.get(i))
     monkeypatch.setattr(db, "all_summaries", lambda: list(sums.values()))
@@ -298,7 +298,7 @@ def test_query_server_does_not_fail_running_jobs(monkeypatch):
         c = make_client(monkeypatch, can_process=flag)
         from app import db
 
-        monkeypatch.setattr(db, "fail_interrupted", lambda: calls.append(1))
+        monkeypatch.setattr(db, "mark_interrupted", lambda: calls.append(1))
         with c:
             pass
         assert len(calls) == expected
@@ -323,3 +323,41 @@ def test_tags_are_cleaned_saved_and_private(monkeypatch):
             assert c.patch("/summaries/t1/tags", json={"tags": bad}, headers=h).status_code == 422
         assert c.patch("/summaries/t1/tags", json={"tags": ["x"]}, headers=hb).status_code == 404
         assert c.patch("/summaries/t2/tags", json={"tags": ["x"]}, headers=h).status_code == 409
+
+
+def test_interrupted_jobs_are_marked_and_resumable(monkeypatch):
+    from app import db, pipeline
+    from app.schemas import Summary
+
+    real_mark = db.mark_interrupted
+    with make_client(monkeypatch) as c:
+        _, ana = seed(monkeypatch)
+        for sid, st in (("q", "queued"), ("t", "transcribing"), ("r", "ready"), ("f", "failed")):
+            db.save(Summary(id=sid, url="u", video_id="v", created_at="2026-01-01", status=st), ana.id)
+        assert real_mark() == 2
+        status = {s.id: s.status for s in db.all_summaries()}
+        assert status == {"q": "interrupted", "t": "interrupted", "r": "ready", "f": "failed"}
+
+        queued = []
+        monkeypatch.setattr(pipeline._executor, "submit", lambda fn, sid: queued.append(sid))
+        _, h = login(c, "ana", "clave-ana-123")
+        db.create_user("beto", __import__("app.security", fromlist=["x"]).hash_password("clave-beto-12"), "user")
+        _, hb = login(c, "beto", "clave-beto-12")
+        assert c.post("/summaries/q/resume", headers=hb).status_code == 404
+        r = c.post("/summaries/q/resume", headers=h)
+        assert r.status_code == 200 and r.json()["status"] == "queued" and r.json()["error"] is None
+        assert queued == ["q"]
+        assert c.post("/summaries/q/resume", headers=h).status_code == 409  # ya en cola
+        assert c.post("/summaries/r/resume", headers=h).status_code == 409
+        assert c.delete("/summaries/t", headers=h).status_code == 204  # descartar
+
+
+def test_query_server_cannot_resume(monkeypatch):
+    from app import db
+    from app.schemas import Summary
+
+    with make_client(monkeypatch, can_process=False) as c:
+        _, ana = seed(monkeypatch)
+        db.save(Summary(id="i", url="u", video_id="v", created_at="2026-01-01", status="interrupted"), ana.id)
+        _, h = login(c, "ana", "clave-ana-123")
+        assert c.post("/summaries/i/resume", headers=h).status_code == 403

@@ -5,7 +5,8 @@ import re
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
-SummaryStatus = Literal["queued", "transcribing", "summarizing", "ready", "failed"]
+# "interrupted": el servidor se reinició a mitad de proceso; el usuario decide si reanudar o descartar.
+SummaryStatus = Literal["queued", "transcribing", "summarizing", "ready", "failed", "interrupted"]
 
 
 class CamelModel(BaseModel):
